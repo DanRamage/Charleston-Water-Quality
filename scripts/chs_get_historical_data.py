@@ -89,14 +89,24 @@ def get_usgs_data(site, dates, units_converter):
 
   station_data = {}
   usgs_rest = UsgsRest()
+  utc_tz = timezone('UTC')
   for rec_date in dates:
     logger.debug("Query site: %s for date: %s" % (site, rec_date))
     usgs_rest.clear()
-    start_date = rec_date - timedelta(hours=24)
+    end_date = rec_date.astimezone(utc_tz)
+    start_date = end_date - timedelta(hours=24)
 
     #usgs_rest.filter(features=[site], start=start_date, end=rec_date, variables=['00010','00010','00065','00095','00095','00300','00300','00480','00480'])
-    usgs_rest.filter(features=[site], start=start_date, end=rec_date)
-    results = usgs_rest.collect()
+    retries = 3
+    for i in range(0, retries):
+      try:
+        usgs_rest.filter(features=[site], start=start_date, end=end_date)
+        results = usgs_rest.collect()
+      except Exception as e:
+        logger.error("Site: %s Date: %s query num: %d problem." % (site, rec_date, i))
+        logger.exception(e)
+      else:
+        break
     if len(results.elements):
       sta = results.elements[0]
       #flat_results = map(flatten_element, sta.elements)
@@ -320,6 +330,7 @@ def get_nos_data(site, dates, units_coverter, db_obj):
     db_obj.buildMinimalPlatform(platform_handle, obs_list)
 
   nos_query = CoopsSos()
+  dates.sort(reverse=True)
   for rec_date in dates:
     logger.debug("Query site: %s for date: %s" % (site, rec_date))
     nos_query.clear()
