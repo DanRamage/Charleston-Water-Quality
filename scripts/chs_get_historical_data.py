@@ -16,10 +16,12 @@ from pyoos.collectors.coops.coops_sos import CoopsSos
 from pytz import timezone
 import json
 from wq_sites import wq_sample_sites
-from openpyxl import load_workbook
+
 from unitsConversion import uomconversionFunctions
 from build_tide_file import create_tide_data_file_mp
 from wqXMRGProcessing import wqXMRGProcessing
+from wq_output_results import wq_sample_data,wq_samples_collection
+
 
 usgs_sites = ['021720709', '021720869', '021720710', '021720698','0217206935','021720677']
 usgs_code_to_obs = {
@@ -91,10 +93,10 @@ def get_usgs_data(site, dates, units_converter):
   usgs_rest = UsgsRest()
   utc_tz = timezone('UTC')
   for rec_date in dates:
-    logger.debug("Query site: %s for date: %s" % (site, rec_date))
     usgs_rest.clear()
-    end_date = rec_date.astimezone(utc_tz)
-    start_date = end_date - timedelta(hours=24)
+    end_date = rec_date.astimezone(utc_tz) + timedelta(hours=24)
+    start_date = rec_date.astimezone(utc_tz) - timedelta(hours=24)
+    logger.debug("Query site: %s for date: %s Begin: %s End: %s" % (site, rec_date, start_date, end_date))
 
     #usgs_rest.filter(features=[site], start=start_date, end=rec_date, variables=['00010','00010','00065','00095','00095','00300','00300','00480','00480'])
     retries = 3
@@ -161,12 +163,14 @@ def get_usgs_data(site, dates, units_converter):
   logger.debug("Finished get_usgs_data. Queried %d dates in %f seconds" % (len(dates), time.time() - start_time))
   return station_data
 
-def parse_sheet_data(xl_file_name, wq_sites):
+def parse_sheet_data(xl_file_name, wq_sites, wq_data_collection):
+  from openpyxl import load_workbook
+
   logger = logging.getLogger('chs_historical_logger')
   logger.debug("Starting parse_sheet_data, parsing file: %s" % (xl_file_name))
 
 
-  sample_data = {}
+  #sample_data = {}
   wb = load_workbook(filename = xl_file_name)
 
   est_tz = timezone('US/Eastern')
@@ -195,13 +199,17 @@ def parse_sheet_data(xl_file_name, wq_sites):
             current_site = None
             if col.value != None:
               cleaned_sample_site_name = col.value.strip(' ')
-
+              for site in wq_sites:
+                if cleaned_sample_site_name.find(site.name) != -1:
+                  current_site = site.name
+              """
               for site in wq_sites:
                 if cleaned_sample_site_name.find(site.name) != -1:
                   current_site = site.name
                   if current_site not in sample_data:
                     sample_data[current_site] = []
                   break
+              """
             else:
               break
           else:
@@ -220,23 +228,111 @@ def parse_sheet_data(xl_file_name, wq_sites):
                 value = None
             try:
               logger.debug("Site: %s Date: %s Value: %s" % (current_site, date_list[col_num - 1], value))
-              sample_data[current_site].append({
-                'site_name': current_site,
-                'sample_date': date_list[col_num-1],
-                'value': value
-              })
+              wq_sample_rec = wq_sample_data()
+              wq_sample_rec.station = current_site
+              wq_sample_rec.date_time = date_list[col_num-1]
+              wq_sample_rec.value = value
+              wq_data_collection.append(wq_sample_rec)
+
+              #sample_data[current_site].append({
+              #  'site_name': current_site,
+              #  'sample_date': date_list[col_num-1],
+              #  'value': value
+              #})
             except Exception as e:
               logger.exception(e)
         col_num += 1
       row_num +=1
-  for site in sample_data:
-    if site is not None:
-      sample_data[site].sort(key=lambda x: x['sample_date'], reverse=True)
+  #for site in sample_data:
+  #  if site is not None:
+  #    sample_data[site].sort(key=lambda x: x['sample_date'], reverse=True)
 
   if logger:
     logger.debug("Finished parse_sheet_data")
-  return sample_data
 
+
+def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
+  from xlrd import xldate
+  import xlrd
+
+
+  station_to_site_map = {
+    'AR2': 'Brittlebank Park',
+    'JIC2': 'James Island Creek 2',
+    'JIC1': 'James Island Creek 1',
+    'SC1': 'Shem Creek 1',
+    'SC2': 'Shem Creek 2',
+    'FB1': 'Folly Beach'}
+  logger = logging.getLogger('chs_historical_logger')
+  logger.debug("Starting parse_dhec_sheet_data, parsing file: %s" % (xl_file_name))
+
+  wb = xlrd.open_workbook(filename = xl_file_name)
+
+  est_tz = timezone('US/Eastern')
+  #utc_tz = timezone('UTC')
+  sample_date = None
+  try:
+    sheet = wb.sheet_by_name('Results')
+  except Exception as e:
+    logger.exception(e)
+  else:
+    row_headers = []
+    results_ndx = \
+    station_ndx = \
+    date_ndx = \
+    parameter_ndx = \
+    time_ndx = None
+    for row_ndx,data_row in enumerate(sheet.get_rows()):
+      if row_ndx != 0:
+        try:
+          wq_sample_rec = wq_sample_data()
+          if data_row[parameter_ndx].value == "Enterococci":
+            station_name = data_row[station_ndx].value.strip()
+            if station_name in station_to_site_map:
+              wq_sample_rec.station = station_to_site_map[station_name]
+              try:
+                date_val = xlrd.xldate.xldate_as_datetime(data_row[date_ndx].value, wb.datemode)
+              except Exception as e:
+                try:
+                  date_val = datetime.strptime(data_row[date_ndx].value, "%Y-%m-%d")
+                except Exception as e:
+                  logger.error("Date format error on line: %d" % (row_ndx))
+                  logger.exception(e)
+                  break
+              try:
+                time_val = xldate.xldate_as_datetime(data_row[time_ndx].value, False)
+                #time_val = datetime.strptime(data_row[time_ndx].value, "%H%M")
+              except Exception as e:
+                val = data_row[date_ndx].value
+                try:
+                  time_val = datetime.strptime(str(val), "%H%M")
+                except Exception as e:
+                  logger.error("Time format error on line: %d" % (row_ndx))
+                  time_val = datetime.strptime('00:00:00', '%H:%M:%S')
+
+              wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time())))
+              #wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time()))).astimezone(utc_tz)
+              wq_sample_rec.value = data_row[results_ndx].value
+              logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
+                                                            wq_sample_rec.date_time,
+                                                            wq_sample_rec.value))
+              if sample_date is None or date_val > sample_date:
+                sample_date = date_val
+              wq_data_collection.append(wq_sample_rec)
+        except Exception as e:
+          logger.error("Error found on row: %d" % (row_ndx))
+          logger.exception(e)
+      else:
+        #Copy the header names out
+        for cell in data_row:
+          row_headers.append(cell.value)
+        station_ndx = row_headers.index('Station')
+        date_ndx = row_headers.index('Date')
+        time_ndx = row_headers.index('Time')
+        results_ndx = row_headers.index('Result')
+        parameter_ndx = row_headers.index("Parameter")
+
+  return sample_date
 
 def process_usgs_data(**kwargs):
   logger = logging.getLogger('chs_historical_logger')
@@ -330,12 +426,12 @@ def get_nos_data(site, dates, units_coverter, db_obj):
     db_obj.buildMinimalPlatform(platform_handle, obs_list)
 
   nos_query = CoopsSos()
-  dates.sort(reverse=True)
+  #dates.sort(reverse=True)
   for rec_date in dates:
     logger.debug("Query site: %s for date: %s" % (site, rec_date))
     nos_query.clear()
-    utc_end_date = rec_date.astimezone(utc_tz)
-    start_date = utc_end_date - timedelta(hours=24)
+    utc_end_date = rec_date.astimezone(utc_tz) + timedelta(hours=24)
+    start_date = rec_date.astimezone(utc_tz) - timedelta(hours=24)
 
     for single_obs in nos_obs:
       obs_type = nos_obs[single_obs]['xenia_name']
@@ -404,16 +500,21 @@ def process_tide_data(**kwargs):
   tide_dates = []
   for tide_station in tide_stations:
     for date_rec in all_dates:
-      tide_date = date_rec
-      tide_date = tide_date.replace(hour=0, minute=0, second=0)
-      tide_dates.append(tide_date)
-    tide_output_file = os.path.join(out_directory, "%s.csv" % (tide_station))
-    create_tide_data_file_mp(tide_station,
-                             tide_dates,
-                             tide_output_file,
-                             4,
-                             log_conf_file,
-                             True)
+      #Add 24 hours since we want to make sure we have +/- 24 hours around our date. This
+      #way we can have enough data to use if we want the sample times starting at midnight
+      #or we want to use the actual sample time. Instead of getting the data for each
+      #time for a given sample day, just do a more coarse approach.
+      #tide_date = date_rec + timedelta(hours=24)
+      #tide_date = tide_date.replace(hour=0, minute=0, second=0)
+      tide_dates.append(date_rec)
+
+  tide_output_file = os.path.join(out_directory, "%s.csv" % (tide_station))
+  create_tide_data_file_mp(tide_station,
+                           tide_dates,
+                           tide_output_file,
+                           4,
+                           log_conf_file,
+                           True)
 
   logger.debug("Finished process_tide_data in %f seconds" % (time.time()-start_time))
 
@@ -446,8 +547,10 @@ def main():
   parser = optparse.OptionParser()
   parser.add_option("--ConfigFile", dest="config_file", default=None,
                     help="INI Configuration file." )
-  parser.add_option("--ExcelHistoryFile", dest="excel_file", default=None,
+  parser.add_option("--WaterKeeperHistoryFile", dest="water_keeper_excel_file", default=None,
                     help="Excel File with historical etcoc data." )
+  parser.add_option("--DHECHistoryFile", dest="dhec_excel_file", default=None,
+                    help="DHEC Excel File with historical etcoc data." )
 
   parser.add_option("--OutputDirectory", dest="out_dir", default='./')
   parser.add_option("--CreateCurrentSampleFile", dest="create_current", default=False,
@@ -508,17 +611,31 @@ def main():
       wq_sites = wq_sample_sites()
       wq_sites.load_sites(file_name=sites_location_file, boundary_file=boundaries_location_file)
 
-      data_dict = {}
-      chs_results = parse_sheet_data(options.excel_file, wq_sites)
+      chs_results = wq_samples_collection()
+
+      if options.water_keeper_excel_file is not None:
+        chs_results = parse_sheet_data(options.excel_file, wq_sites, chs_results)
+
+      if options.dhec_excel_file is not None:
+        file_list = options.dhec_excel_file.split(',')
+        for file in file_list:
+          parse_dhec_sheet_data(file, chs_results)
+
       #Build list of all dates.
       all_dates = []
+      est_tz = timezone('US/Eastern')
       for site in chs_results:
         logger.debug("Site: %s getting dates" % (site))
         site_data = chs_results[site]
         for rec in site_data:
-          if rec['sample_date'] not in all_dates:
-            logger.debug("Site: %s adding date: %s" % (site, rec['sample_date']))
-            all_dates.append(rec['sample_date'])
+          #if rec['sample_date'] not in all_dates:
+          if rec.date_time.date() not in all_dates:
+            logger.debug("Site: %s adding date: %s" % (site, rec.date_time.date()))
+            all_dates.append(rec.date_time.date())
+            #all_dates.append(rec['sample_date'])
+      for ndx,date in enumerate(all_dates):
+        date = est_tz.localize(datetime.combine(date, datetime.min.time()))
+        all_dates[ndx] = date
 
       all_dates.sort()
       #Getting/Processing USGS data?
@@ -535,16 +652,32 @@ def main():
                           db_obj=historic_db,
                           units_converter=units_conversion)
       if options.process_tide_data:
+        #For tides, we want to use the samples date and time.
+        tide_dates = []
+        last_date = None
+        for site in chs_results:
+          logger.debug("Site: %s getting dates" % (site))
+          site_data = chs_results[site]
+          for rec in site_data:
+            if (last_date is None or last_date != rec.date_time):
+              last_date = est_tz.localize(datetime.combine(rec.date_time.date(), datetime.min.time()))
+              if last_date not in tide_dates:
+                tide_dates.append(last_date)
+
+            logger.debug("Site: %s adding date: %s" % (site, rec.date_time))
+            tide_dates.append(rec.date_time)
+
         process_tide_data(output_directory=options.out_dir,
                           query_tide=options.query_tide,
-                          all_dates=all_dates,
+                          all_dates=tide_dates,
                           db_obj=historic_db,
                           units_converter=units_conversion,
                           log_config_file=logConfFile)
-      if options.process_nexrad:
-        process_nexrad_data(output_directory=options.out_dir,
-                            config_file=options.config_file,
-                            import_directory=options.nexrad_directory_list)
+
+        if options.process_nexrad:
+          process_nexrad_data(output_directory=options.out_dir,
+                              config_file=options.config_file,
+                              import_directory=options.nexrad_directory_list)
     logger.debug("Closing log.")
 if __name__ == "__main__":
   main()

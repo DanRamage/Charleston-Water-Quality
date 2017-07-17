@@ -2,10 +2,10 @@ import sys
 sys.path.append('../commonfiles/python')
 import os
 import logging.config
+import math
 
 from datetime import datetime, timedelta
 from pytz import timezone
-from shapely.geometry import Polygon
 import logging.config
 import optparse
 import ConfigParser
@@ -13,10 +13,10 @@ from collections import OrderedDict
 
 from wqHistoricalData import wq_data
 from wqHistoricalData import tide_data_file_ex,station_geometry,sampling_sites, wq_defines, geometry_list
-from NOAATideData import noaaTideData
 from wq_sites import wq_sample_sites
 from wqDatabase import wqDB
-from chs_get_historical_data import parse_sheet_data
+from chs_get_historical_data import parse_sheet_data, parse_dhec_sheet_data
+from wq_output_results import wq_sample_data,wq_samples_collection
 
 from xeniaSQLAlchemy import xeniaAlchemy, multi_obs, func
 from xeniaSQLiteAlchemy import xeniaAlchemy as sl_xeniaAlchemy, multi_obs as sl_multi_obs, func as sl_func
@@ -60,10 +60,10 @@ class chs_wq_historical_data(wq_data):
 
     self.nos_stations = ['nos.8665530.met']
     self.nos_variables = [('wind_speed', 'm_s-1'),
-                          ('wind_from_direction', 'degrees'),
                           ('water_temperature', 'celsius')]
     self.usgs_stations = ['usgs.021720709.wq', 'usgs.021720869.wq', 'usgs.021720710.wq', 'usgs.021720698.wq', 'usgs.0217206935.wq', 'usgs.021720677.wq']
     self.usgs_variables = [('water_conductivity', 'uS_cm-1'),
+                           ('salinity', 'psu'),
                       ('gage_height', 'm'),
                       ('water_temperature', 'celsius'),
                       ('oxygen_concentration', 'mg_L-1')]
@@ -115,6 +115,8 @@ class chs_wq_historical_data(wq_data):
     self.get_tide_data(start_date, wq_tests_data)
 
     for station in self.nos_stations:
+      if start_date.date() == datetime.strptime('2015-05-06', '%Y-%m-%d').date():
+        i=0
       for variable in self.nos_variables:
         self.get_platform_data(station, variable[0], variable[1], start_date, wq_tests_data)
 
@@ -176,15 +178,19 @@ class chs_wq_historical_data(wq_data):
         var_name = '%s_nexrad_total_3_day_delay' % (clean_var_boundary_name)
         wq_tests_data[var_name] = wq_defines.NO_DATA
 
-    for station in self.usgs_stations:
-      for variable in self.usgs_variables:
-        '%s-%s' % (station, variable[0])
-        wq_tests_data[var_name] = wq_defines.NO_DATA
-
     for station in self.nos_stations:
       for variable in self.nos_variables:
-        var_name = '%s-%s' % (station, variable[0])
+        var_name = '%s-%s' % (station.replace('.', '_'), variable[0])
         wq_tests_data[var_name] = wq_defines.NO_DATA
+        if variable[0] == 'wind_speed':
+          var_name = '%s-%s' % (station.replace('.', '_'), 'wind_from_direction')
+          wq_tests_data[var_name] = wq_defines.NO_DATA
+
+    for station in self.usgs_stations:
+      for variable in self.usgs_variables:
+        var_name = '%s-%s' % (station.replace('.', '_'), variable[0])
+        wq_tests_data[var_name] = wq_defines.NO_DATA
+
 
     if self.logger:
       self.logger.debug("Finished creating and initializing data dict.")
@@ -199,7 +205,11 @@ class chs_wq_historical_data(wq_data):
       var_name = '%s-%s' % (station, variable)
       end_date = start_date
       begin_date = start_date - timedelta(hours=24)
-      sensor_id = self.xenia_db.sensorExists(variable, uom, platform_handle, 1)
+      if variable != 'wind_speed':
+        sensor_id = self.xenia_db.sensorExists(variable, uom, platform_handle, 1)
+      else:
+        sensor_id = self.xenia_db.sensorExists(variable, uom, platform_handle, 1)
+        wind_dir_id = self.xenia_db.sensorExists('wind_from_direction', 'degrees_true', platform_handle, 1)
 
       if sensor_id is not -1 and sensor_id is not None:
         recs = self.xenia_db.session.query(sl_multi_obs) \
@@ -208,10 +218,71 @@ class chs_wq_historical_data(wq_data):
           .filter(sl_multi_obs.sensor_id == sensor_id) \
           .filter(or_(sl_multi_obs.qc_level == qaqcTestFlags.DATA_QUAL_GOOD, sl_multi_obs.qc_level == None)) \
           .order_by(sl_multi_obs.m_date).all()
+        if variable == 'wind_speed':
+          dir_recs = self.xenia_db.session.query(sl_multi_obs) \
+            .filter(sl_multi_obs.m_date >= begin_date.strftime('%Y-%m-%dT%H:%M:%S')) \
+            .filter(sl_multi_obs.m_date < end_date.strftime('%Y-%m-%dT%H:%M:%S')) \
+            .filter(sl_multi_obs.sensor_id == wind_dir_id) \
+            .filter(or_(sl_multi_obs.qc_level == qaqcTestFlags.DATA_QUAL_GOOD, sl_multi_obs.qc_level == None)) \
+            .order_by(sl_multi_obs.m_date).all()
+
         if len(recs):
-          wq_tests_data[var_name] = sum(rec.m_value for rec in recs) / len(recs)
-          self.logger.debug("Platform: %s Avg %s: %f Records used: %d" % (
-            platform_handle, variable, wq_tests_data[var_name], len(recs)))
+          if variable == 'wind_speed':
+            if sensor_id is not None and wind_dir_id is not None:
+              wind_dir_tuples = []
+              direction_tuples = []
+              scalar_speed_avg = None
+              speed_count = 0
+              for wind_speed_row in recs:
+                for wind_dir_row in dir_recs:
+                  if wind_speed_row.m_date == wind_dir_row.m_date:
+                    #self.logger.debug("Building tuple for Speed(%s): %f Dir(%s): %f" % (
+                    #wind_speed_row.m_date, wind_speed_row.m_value, wind_dir_row.m_date, wind_dir_row.m_value))
+                    if scalar_speed_avg is None:
+                      scalar_speed_avg = 0
+                    scalar_speed_avg += wind_speed_row.m_value
+                    speed_count += 1
+                    # Vector using both speed and direction.
+                    wind_dir_tuples.append((wind_speed_row.m_value, wind_dir_row.m_value))
+                    # Vector with speed as constant(1), and direction.
+                    direction_tuples.append((1, wind_dir_row.m_value))
+                    break
+
+              if len(wind_dir_tuples):
+                avg_speed_dir_components = calcAvgSpeedAndDir(wind_dir_tuples)
+                self.logger.debug("Platform: %s Avg Wind Speed: %f(m_s-1) %f(mph) Direction: %f" % (platform_handle,
+                                                                                                    avg_speed_dir_components[
+                                                                                                      0],
+                                                                                                    avg_speed_dir_components[
+                                                                                                      0],
+                                                                                                    avg_speed_dir_components[
+                                                                                                      1]))
+
+                # Unity components, just direction with speeds all 1.
+                avg_dir_components = calcAvgSpeedAndDir(direction_tuples)
+                scalar_speed_avg = scalar_speed_avg / speed_count
+                wq_tests_data[var_name] = scalar_speed_avg
+                wind_dir_var_name = '%s-%s' % (station, 'wind_from_direction')
+                wq_tests_data[wind_dir_var_name] = avg_dir_components[1]
+                self.logger.debug(
+                  "Platform: %s Avg Scalar Wind Speed: %f(m_s-1) %f(mph) Direction: %f" % (platform_handle,
+                                                                                           scalar_speed_avg,
+                                                                                           scalar_speed_avg,
+                                                                                           avg_dir_components[1]))
+
+
+          else:
+            wq_tests_data[var_name] = sum(rec.m_value for rec in recs) / len(recs)
+            self.logger.debug("Platform: %s Avg %s: %f Records used: %d" % (
+              platform_handle, variable, wq_tests_data[var_name], len(recs)))
+            if variable == 'water_conductivity':
+              water_con = wq_tests_data[var_name]
+              if uom == 'uS_cm-1':
+                water_con = water_con / 1000.0
+                salinity_var = '%s-%s' % (station, 'salinity')
+              wq_tests_data[salinity_var] = 0.47413 / (math.pow((1 / water_con), 1.07) - 0.7464 * math.pow(10, -3))
+              self.logger.debug("Platform: %s Avg %s: %f Records used: %d" % (
+                platform_handle, 'salinity', wq_tests_data[salinity_var], len(recs)))
         else:
           self.logger.error("Platform: %s sensor: %s(%s) Date: %s had no data" % (platform_handle, variable, uom, start_date))
       else:
@@ -351,7 +422,13 @@ def create_historical_summary(**kwargs):
     try:
       chs_wq_data = chs_wq_historical_data(xenia_database_name=wq_historical_db,
                                     use_logger=True)
-      chs_results = parse_sheet_data(kwargs['water_keepers_historical_data'], wq_sites)
+
+      chs_results = wq_samples_collection()
+      if len(kwargs['water_keepers_historical_data']):
+        parse_sheet_data(kwargs['water_keepers_historical_data'], wq_sites, chs_results)
+      elif len(kwargs['dhec_historical_data']):
+        for file in kwargs['dhec_historical_data']:
+          parse_dhec_sheet_data(file, chs_results)
     except Exception, e:
       if logger:
         logger.exception(e)
@@ -377,16 +454,17 @@ def create_historical_summary(**kwargs):
           site_data = chs_results[site_name]
           auto_number = 0
           for rec in site_data:
-            wq_date = rec['sample_date']
+            #wq_date = rec['sample_date']
+            wq_date = rec.date_time
             wq_utc_date = wq_date.astimezone(utc_tz)
 
             logger.debug(
               "Start building historical wq data for: %s Date/Time UTC: %s/EST: %s" % (site.name, wq_utc_date, wq_date))
 
-            entero_value = rec['value']
-            if rec['sample_date'] not in water_keeper_dates:
+            entero_value = rec.value
+            if rec.date_time not in water_keeper_dates:
               logger.debug("Site: %s adding date: %s" % (site_name, wq_date))
-              water_keeper_dates.append(rec['sample_date'])
+              water_keeper_dates.append(rec.date_time)
 
               try:
                 #Get the station specific tide stations
@@ -459,8 +537,11 @@ def main():
                     action="store_true", default=True,
                     dest="build_summary_data",
                     help="Flag that specifies to construct summary file.")
-  parser.add_option("-w", "--WaterKeeperHistoricalFile", dest="wk_historical_wq_file",
+  parser.add_option("-w", "--WaterKeeperHistoricalFile", dest="wk_historical_wq_file", default='',
                     help="Input file with the dates and stations we are creating summary for." )
+  parser.add_option("--DHECHistoryFile", dest="dhec_excel_file", default='',
+                    help="DHEC Excel File with historical etcoc data." )
+
   parser.add_option("-s", "--HistoricalSummaryOutPath", dest="summary_out_path",
                     help="Directory to write the historical summary data to." )
   parser.add_option("-d", "--StartDate", dest="starting_date",
@@ -501,6 +582,7 @@ def main():
     if options.build_summary_data:
       create_historical_summary(config_file=config_file,
                                 water_keepers_historical_data=options.wk_historical_wq_file,
+                                dhec_historical_data=options.dhec_excel_file.split(','),
                                 summary_out_directory=options.summary_out_path,
                                 start_time_midnight=options.start_time_midnight,
                                 tide_data_file=options.tide_data_file)
