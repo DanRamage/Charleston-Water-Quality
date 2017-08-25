@@ -7,7 +7,7 @@ from pytz import timezone
 from shapely.geometry import Polygon
 import logging.config
 
-
+import time
 from wqHistoricalData import wq_data
 from wqXMRGProcessing import wqDB
 from wqHistoricalData import station_geometry,sampling_sites, wq_defines, geometry_list
@@ -200,6 +200,7 @@ class chs_wq_data(wq_data):
     return
 
   def get_platform_data(self, platform_handle, variable, uom, start_date, wq_tests_data):
+    start_time = time.time()
     try:
       self.logger.debug("Platform: %s Obs: %s(%s) Date: %s query" % (platform_handle, variable, uom, start_date))
 
@@ -290,7 +291,7 @@ class chs_wq_data(wq_data):
             "Platform: %s sensor: %s(%s) Date: %s had no data" % (platform_handle, variable, uom, start_date))
       else:
         self.logger.error("Platform: %s sensor: %s(%s) does not exist" % (platform_handle, variable, uom))
-
+      self.logger.debug("Platform: %s query finished in %f seconds" % (platform_handle, time.time()-start_time))
     except Exception as e:
       self.logger.exception(e)
       return False
@@ -298,6 +299,7 @@ class chs_wq_data(wq_data):
     return True
 
   def get_tide_data(self, start_date, wq_tests_data):
+    start_time = time.time()
     if self.logger:
       self.logger.debug("Start retrieving tide data for station: %s date: %s" % (self.tide_station, start_date))
 
@@ -338,11 +340,12 @@ class chs_wq_data(wq_data):
         wq_tests_data['tide_lo_%s' % (tide_station)] = offset_lo
 
     if self.logger:
-      self.logger.debug("Finished retrieving tide data for station: %s date: %s" % (self.tide_station, start_date))
+      self.logger.debug("Finished retrieving tide data for station: %s date: %s in %f seconds" % (self.tide_station, start_date, time.time()-start_time))
 
     return
 
   def get_nexrad_data(self, start_date, wq_tests_data):
+    start_time = time.time()
     if self.logger:
       self.logger.debug("Start retrieving nexrad data datetime: %s" % (start_date.strftime('%Y-%m-%d %H:%M:%S')))
 
@@ -406,4 +409,5 @@ class chs_wq_data(wq_data):
         self.logger.debug("Finished retrieving nexrad platfrom: %s" % (platform_handle))
 
     if self.logger:
-      self.logger.debug("Finished retrieving nexrad data datetime: %s" % (start_date.strftime('%Y-%m-%d %H:%M:%S')))
+      self.logger.debug("Finished retrieving nexrad data datetime: %s in %f seconds" % (start_date.strftime('%Y-%m-%d %H:%M:%S'),
+                                                                                        time.time() - start_time))
