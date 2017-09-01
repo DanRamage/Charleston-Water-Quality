@@ -9,8 +9,8 @@ import time
 import optparse
 import ConfigParser
 from collections import OrderedDict
-
 from yapsy.PluginManager import PluginManager
+from multiprocessing import Queue
 
 from wq_prediction_tests import wqEquations
 from enterococcus_wq_test import EnterococcusPredictionTest,EnterococcusPredictionTestEx
