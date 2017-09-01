@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source /usr2/virtualenvs/pyenv2.7/bin/activate;
+source /usr/local/virtualenv/pyenv-2.7.11/bin/activate
 
 cd /home/xeniaprod/scripts/Charleston-Water-Quality/scripts;
 
