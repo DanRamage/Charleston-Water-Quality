@@ -30,13 +30,14 @@ class nexrad_collector_plugin(data_collector_plugin):
     else:
       try:
         logger = logging.getLogger(__name__)
+        logger.debug("Logger opened.")
         backfill_hours = config_file.getint('nexrad_database', 'backfill_hours')
         fill_gaps = config_file.getboolean('nexrad_database', 'fill_gaps')
+        logger.debug("Backfill hours: %d Fill Gaps: %s" % (backfill_hours, fill_gaps))
       except (ConfigParser.Error, Exception) as e:
         traceback.print_exc(e)
       else:
         try:
-
           xmrg_proc = wqXMRGProcessing(logger=True)
           xmrg_proc.load_config_settings(config_file = self.ini_file)
 
