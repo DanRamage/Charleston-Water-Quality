@@ -15,7 +15,7 @@ from yapsy.PluginManager import PluginManager
 from wq_prediction_tests import wqEquations
 from enterococcus_wq_test import EnterococcusPredictionTest,EnterococcusPredictionTestEx
 from wq_sites import wq_sample_sites
-from output_plugin import output_plugin
+from data_collector_plugin import data_collector_plugin
 from wq_prediction_engine import wq_prediction_engine, data_result_types
 from stats import stats
 from chs_wq_data import chs_wq_data
