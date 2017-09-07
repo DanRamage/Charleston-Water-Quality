@@ -151,14 +151,15 @@ class chs_prediction_engine(wq_prediction_engine):
       config_file = ConfigParser.RawConfigParser()
       config_file.read(kwargs['config_file_name'])
 
-      data_collector_plugin_directories=config_file.get('data_collector_plugins', 'plugin_directories').split(',')
-
-      self.collect_data(data_collector_plugin_directories=data_collector_plugin_directories)
+      data_collector_plugin_directories=config_file.get('data_collector_plugins', 'plugin_directories')
+      if len(data_collector_plugin_directories):
+        data_collector_plugin_directories = data_collector_plugin_directories.split(',')
+        self.collect_data(data_collector_plugin_directories=data_collector_plugin_directories)
 
 
       boundaries_location_file = config_file.get('boundaries_settings', 'boundaries_file')
       sites_location_file = config_file.get('boundaries_settings', 'sample_sites')
-      xenia_wq_db_file = config_file.get('database', 'name')
+      xenia_nexrad_db_file = config_file.get('database', 'name')
 
       #MOve xenia obs db settings into standalone ini. We can then
       #check the main ini file into source control without exposing login info.
@@ -171,6 +172,7 @@ class chs_prediction_engine(wq_prediction_engine):
       xenia_obs_db_password = xenia_obs_db_config_file.get('xenia_observation_database', 'password')
       xenia_obs_db_name = xenia_obs_db_config_file.get('xenia_observation_database', 'database')
 
+      units_file = config_file.get('units_conversion', 'config_file')
       output_plugin_dirs=config_file.get('output_plugins', 'plugin_directories').split(',')
     except (ConfigParser.Error, Exception) as e:
       self.logger.exception(e)
@@ -180,13 +182,13 @@ class chs_prediction_engine(wq_prediction_engine):
       wq_sites.load_sites(file_name=sites_location_file, boundary_file=boundaries_location_file)
       #Retrieve the data needed for the models.
 
-      wq_data = chs_wq_data(xenia_wq_db_name=xenia_wq_db_file,
-                                    xenia_obs_db_type='postgres',
-                                    xenia_obs_db_host=xenia_obs_db_host,
-                                    xenia_obs_db_user=xenia_obs_db_user,
-                                    xenia_obs_db_password=xenia_obs_db_password,
-                                    xenia_obs_db_name=xenia_obs_db_name
-                                    )
+      wq_data = chs_wq_data(xenia_nexrad_db_name=xenia_nexrad_db_file,
+                            xenia_obs_db_type='postgres',
+                            xenia_obs_db_host=xenia_obs_db_host,
+                            xenia_obs_db_user=xenia_obs_db_user,
+                            xenia_obs_db_password=xenia_obs_db_password,
+                            xenia_obs_db_name=xenia_obs_db_name,
+                            units_file=units_file)
 
       site_model_ensemble = []
       #First pass we want to get all the data, after that we only need to query
@@ -194,6 +196,23 @@ class chs_prediction_engine(wq_prediction_engine):
       reset_site_specific_data_only = False
       site_data = OrderedDict()
       total_time = 0
+      tide_offsets = []
+      #Get all the offset stations;
+      for site in wq_sites:
+        # Get the station specific tide stations
+        #tide_station = config_file.get(site.name, 'tide_station')
+        offset_tide_station = config_file.get(site.name, 'offset_tide_station')
+        # We use the virtual tide sites as there no stations near the sites.
+        tide_station_settings = {
+          'tide_station': config_file.get(site.name, 'tide_station'),
+          'offset_tide_station': config_file.get(offset_tide_station, 'station_id'),
+          'hi_tide_time_offset': config_file.getint(offset_tide_station, 'hi_tide_time_offset'),
+          'lo_tide_time_offset': config_file.getint(offset_tide_station, 'lo_tide_time_offset'),
+          'hi_tide_height_offset': config_file.getfloat(offset_tide_station, 'hi_tide_height_offset'),
+          'lo_tide_height_offset': config_file.getfloat(offset_tide_station, 'lo_tide_height_offset')
+        }
+        tide_offsets.append(tide_station_settings)
+
       for site in wq_sites:
         try:
           #Get all the models used for the particular sample site.
@@ -201,7 +220,7 @@ class chs_prediction_engine(wq_prediction_engine):
           if len(model_list):
             #Create the container for all the models.
             site_equations = wqEquations(site.name, model_list, True)
-
+            """
             #Get the station specific tide stations
             tide_station = config_file.get(site.name, 'tide_station')
             offset_tide_station = config_file.get(site.name, 'offset_tide_station')
@@ -213,6 +232,7 @@ class chs_prediction_engine(wq_prediction_engine):
               'hi_tide_height_offset': config_file.getfloat(offset_tide_station, 'hi_tide_height_offset'),
               'lo_tide_height_offset': config_file.getfloat(offset_tide_station, 'lo_tide_height_offset')
             }
+            """
           else:
             self.logger.error("No models found for site: %s" % (site.name))
         except (ConfigParser.Error,Exception) as e:
@@ -221,8 +241,9 @@ class chs_prediction_engine(wq_prediction_engine):
           try:
             if len(model_list):
               wq_data.reset(site=site,
-                                tide_station=tide_station,
-                                tide_offset_params=tide_offset_settings
+                            tide_station_settings=tide_offsets,
+                                #tide_station=tide_station,
+                                #tide_offset_params=tide_offset_settings
                                 )
 
               site_data['station_name'] = site.name
@@ -250,7 +271,8 @@ class chs_prediction_engine(wq_prediction_engine):
 
               site_model_ensemble.append({'metadata': site,
                                           'models': site_equations,
-                                          'statistics': entero_stats})
+                                          'statistics': entero_stats,
+                                          'entero_value': None})
           except Exception,e:
             self.logger.exception(e)
 

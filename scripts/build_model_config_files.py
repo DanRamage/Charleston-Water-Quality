@@ -8,6 +8,8 @@ import optparse
 import ConfigParser
 import traceback
 from openpyxl import load_workbook
+import json
+
 from wq_sites import wq_sample_sites
 
 
@@ -30,7 +32,7 @@ excel_sheet_columns = ["Site",
                        "R2",
                        "Adj-R2",
                        "AUC"]
-
+"""
 worksheet_name_to_sample_site_mapping = {
   'BrittlebankParkMidnight': 'Brittlebank Park',
   'BrittlebankParkMidnightTrans':'Brittlebank Park',
@@ -57,6 +59,7 @@ worksheet_name_to_sample_site_mapping = {
   'ShemCreek2SampleTime': 'Shem Creek 2',
   'ShemCreek2SampleTimeTrans': 'Shem Creek 2'
 }
+"""
 
 def cleanup_mlr(formula_string, location):
   no_log_10 = False
@@ -73,12 +76,28 @@ def cleanup_mlr(formula_string, location):
     formula_string = formula_string.replace('radar_rain_total_two_day_delay', '%s_nexrad_total_2_day_delay' % (location))
     formula_string = formula_string.replace('radar_rain_total_three_day_delay',
                                             '%s_nexrad_total_3_day_delay' % (location))
-    formula_string = formula_string.replace('range', 'tide_range_8661070')
+  if formula_string.find("-gage_height") != -1:
+    formula_string = formula_string.replace("-gage_height", "_gage_height")
+  if formula_string.find("-water_temperature") != -1:
+    formula_string = formula_string.replace("-water_temperature", "_water_temperature")
+  if formula_string.find("-water_conductivity") != -1:
+    formula_string = formula_string.replace("-water_conductivity", "_water_conductivity")
+  if formula_string.find("-salinity") != -1:
+    formula_string = formula_string.replace("-salinity", "_salinity")
+  if formula_string.find("-oxygen_concentration") != -1:
+    formula_string = formula_string.replace("-oxygen_concentration", "_oxygen_concentration")
+  if formula_string.find("-wind_speed") != -1:
+    formula_string = formula_string.replace("-wind_speed", "_wind_speed")
+  if formula_string.find("-wind_from_direction") != -1:
+    formula_string = formula_string.replace("-wind_from_direction", "_wind_from_direction")
 
-  formula_string = formula_string.replace('apache_', 'apachepier_')
+  if formula_string.find("nos_8665530_met") != -1:
+    formula_string = formula_string.replace("nos_8665530_met", "nos_8665530_WL")
+
   if no_log_10:
     formula_string = formula_string.replace('etcoc = ', '')
     formula_string = formula_string.replace('enterococcus_value = ', '')
+    formula_string = formula_string.replace('enterococcus_value= ', '')
   else:
     formula_string = formula_string.replace('LOG10(etcoc) =', '')
     formula_string = formula_string.replace('LOG10(enterococcus_value) =', '')
@@ -94,6 +113,7 @@ def process_excel_file(**kwargs):
   test_sites = kwargs['test_sites']
   watersheds = kwargs['watersheds']
   output_dir = kwargs['output_dir']
+  worksheet_name_to_sample_site_mapping = kwargs['worksheet_to_site']
   wb = load_workbook(filename = excel_file)
 
 
@@ -110,29 +130,11 @@ def process_excel_file(**kwargs):
       matches = []
       site_name = sample_site.name.replace('-', '').upper()
 
-      midnight_models = False
-      if site_name.find('midnight') != -1:
-        midnight_models = True
-
       for s_name in ws_sites:
         if s_name in worksheet_name_to_sample_site_mapping:
-          matches.append(s_name)
-        """  
-        if s_name.find(site_name) != -1:
-          check_char = None
-          if len(s_name) > len(site_name):
-            if a_site:
-              check_char = s_name[len(site_name)-1]
-            else:
-              check_char = s_name[len(site_name)]
-          if check_char is not None:
-            if not a_site and check_char != "A":
-              matches.append(s_name)
-            elif a_site and check_char == 'A':
-              matches.append(s_name)
-          else:
+          if sample_site.name == worksheet_name_to_sample_site_mapping[s_name]:
             matches.append(s_name)
-        """
+
       if len(matches):
         logger.info("Creating model config for: %s" % (sample_site.name))
         model_config_parser = ConfigParser.ConfigParser()
@@ -152,19 +154,25 @@ def process_excel_file(**kwargs):
         with open(model_config_outfile_name, 'w') as model_config_ini_obj:
           for model_sheet in matches:
             logger.debug("Processing worksheet: %s" % (model_sheet))
-            data_sheet = wb[model_sheet]
-            for index, row in enumerate(data_sheet.iter_rows()):
-              if index >= 1:
-                formula_string = row[3].value
-                formula_string = cleanup_mlr(formula_string, None)
+            try:
+              data_sheet = wb[model_sheet]
+              for index, row in enumerate(data_sheet.iter_rows()):
+                if index >= 1:
+                  formula_string = row[3].value
+                  if formula_string is not None and len(formula_string):
+                    formula_string = cleanup_mlr(formula_string, None)
 
-                model_section = "model_%d" % model_num
-                model_name = "%s-%d" % (model_sheet, index)
-                model_config_parser.add_section(model_section)
-                model_config_parser.set(model_section, 'name', model_name)
-                model_config_parser.set(model_section, 'formula', formula_string)
+                    model_section = "model_%d" % model_num
+                    model_name = "%s-%d" % (model_sheet, index)
+                    model_config_parser.add_section(model_section)
+                    model_config_parser.set(model_section, 'name', model_name)
+                    model_config_parser.set(model_section, 'formula', formula_string)
 
-                model_num += 1
+                    model_num += 1
+                  else:
+                    logger.error("No forumla string on row: %d" % (index))
+            except Exception as e:
+              logger.exception(e)
           model_config_parser.set("settings", "model_count", model_num-1)
           model_config_parser.write(model_config_ini_obj)
 
@@ -182,6 +190,8 @@ def main():
                     help="Directory where the CSV files defining the models are located." )
   parser.add_option("-x", "--ExcelModelFile", dest="excel_file", default="",
                     help="Excel file with the model equations." )
+  parser.add_option("-j", "--WorksheetToSiteMap", dest="worksheet_to_site", default="",
+                    help="Json file that has the mapping of worksheet to the site it is for." )
 
   (options, args) = parser.parse_args()
 
@@ -209,7 +219,9 @@ def main():
   try:
     boundaries_location_file = config_file.get('boundaries_settings', 'boundaries_file')
     sites_location_file = config_file.get('boundaries_settings', 'sample_sites')
-  except ConfigParser.Error,e:
+    with open(options.worksheet_to_site, "r") as worksheet_site_file:
+      worksheet_name_to_sample_site_mapping = json.load(worksheet_site_file)
+  except (ConfigParser.Error,Exception) as e:
     if logger:
       logger.exception(e)
   else:
@@ -312,7 +324,8 @@ def main():
       process_excel_file(source_file=options.excel_file,
                          test_sites=wq_sites,
                          watersheds=watersheds,
-                         output_dir=options.dest_dir)
+                         output_dir=options.dest_dir,
+                         worksheet_to_site=worksheet_name_to_sample_site_mapping)
 
   logger.info("Log file closed.")
 
