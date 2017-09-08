@@ -63,7 +63,9 @@ worksheet_name_to_sample_site_mapping = {
 
 def cleanup_mlr(formula_string, location):
   no_log_10 = False
-  if formula_string.find('etcoc =') != -1 or formula_string.find('enterococcus_value =') != -1:
+  if formula_string.find('etcoc =') != -1 or\
+      formula_string.find('enterococcus_value =') != -1 or \
+      formula_string.find("enterococcus_value=") != -1:
     no_log_10 = True
   formula_string = formula_string.replace('[', '(')
   formula_string = formula_string.replace(']', ')')
@@ -94,10 +96,12 @@ def cleanup_mlr(formula_string, location):
   if formula_string.find("nos_8665530_met") != -1:
     formula_string = formula_string.replace("nos_8665530_met", "nos_8665530_WL")
 
+  if formula_string.find("enterococcus_value=") != -1:
+    formula_string = formula_string.replace('enterococcus_value= ', '')
+
   if no_log_10:
     formula_string = formula_string.replace('etcoc = ', '')
     formula_string = formula_string.replace('enterococcus_value = ', '')
-    formula_string = formula_string.replace('enterococcus_value= ', '')
   else:
     formula_string = formula_string.replace('LOG10(etcoc) =', '')
     formula_string = formula_string.replace('LOG10(enterococcus_value) =', '')
