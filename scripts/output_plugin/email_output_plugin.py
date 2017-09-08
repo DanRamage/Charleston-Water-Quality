@@ -36,6 +36,7 @@ class email_output_plugin(output_plugin):
     if self.logger:
       self.logger.debug("Starting emit for email output.")
     try:
+      self.logger.debug("Opening template: %s" % (self.results_template))
       mytemplate = Template(filename=self.results_template)
       file_ext = os.path.splitext(self.result_outfile)
       file_parts = os.path.split(file_ext[0])
