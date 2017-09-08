@@ -6,7 +6,7 @@ import time
 from wq_prediction_plugin import wq_prediction_engine_plugin
 from chs_wq_prediction_engine import chs_prediction_engine
 
-class mb_prediction_plugin(wq_prediction_engine_plugin):
+class chs_prediction_plugin(wq_prediction_engine_plugin):
 
   def do_processing(self, **kwargs):
     start_do_processing_time = time.time()

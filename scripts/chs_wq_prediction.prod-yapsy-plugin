@@ -1,0 +1,12 @@
+[Core]
+Name = Charleston Prediction Plugin
+Module = chs_prediction_plugin
+Ini=/home/xeniaprod/scripts/Charleston-Water-Quality/config/chs_prediction_config.ini
+
+
+[Documentation]
+Author = Dan Ramage
+Version = 0.1
+Website = http://howsthebeach.org
+Description = Charleston specific water quality processing.
+
