@@ -142,7 +142,8 @@ def process_excel_file(**kwargs):
       if len(matches):
         logger.info("Creating model config for: %s" % (sample_site.name))
         model_config_parser = ConfigParser.ConfigParser()
-        model_config_outfile_name = os.path.join(output_dir, '%s.ini' % (sample_site.name.lower()))
+        name = sample_site.name.lower().replace(' ', '_')
+        model_config_outfile_name = os.path.join(output_dir, '%s.ini' % (name))
 
         # Check to see if the model ini file exists.
         ini_exists = False
@@ -273,7 +274,8 @@ def main():
               for sample_site in sites_list:
                 logger.info("Creating model config for: %s" % (sample_site))
                 model_config_parser = ConfigParser.ConfigParser()
-                model_config_outfile_name = os.path.join(options.dest_dir, '%s.ini' % (sample_site.lower()))
+                name = sample_site.lower().replace(' ', '_')
+                model_config_outfile_name = os.path.join(options.dest_dir, '%s.ini' % (name))
                 try:
                   #Check to see if the model ini file exists.
                   ini_exists = False
