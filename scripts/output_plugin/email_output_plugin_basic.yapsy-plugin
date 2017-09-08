@@ -1,0 +1,21 @@
+[Core]
+Name = WQ Email Plugin
+Module = email_output_plugin
+
+[Documentation]
+Author = Dan Ramage
+Version = 0.1
+Website = http://howsthebeach.org
+Description = Myrtle Beach specific water quality processing.
+
+[Settings]
+mailhost=
+fromaddr=
+toaddrs=
+subject='[WQ] Myrtle Beach Prediction Results for %s'
+user=dan
+password=
+results_template=
+results_outfile=
+report_url=
+use_logging=True

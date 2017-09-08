@@ -1,0 +1,22 @@
+[Core]
+Name = WQ Email Plugin
+Module = email_output_plugin
+
+[Documentation]
+Author = Dan Ramage
+Version = 0.1
+Website = http://howsthebeach.org
+Description = Charleston specific water quality processing.
+
+[Settings]
+mailhost=inlet.geol.sc.edu
+fromaddr=dan@inlet.geol.sc.edu
+toaddrs=dan@inlet.geol.sc.edu,hkelsey@ca.umces.edu,mjnkarma@gmail.com,dwayne.e.porter@gmail.com
+subject='[WQ] Sarasota Prediction Results for %s'
+user=dan
+password=dramage239
+results_template=/home/xeniaprod/scripts/Charleston-Water-Quality/config/templates/test_results_report.mako
+results_outfile=/home/xeniaprod/scripts/Charleston-Water-Quality/data/prediction_results/prediction_results.html
+report_url=http://129.252.139.124/projects/xenia/feeds/florida_wq/prediction_results/
+use_logging=True
+
