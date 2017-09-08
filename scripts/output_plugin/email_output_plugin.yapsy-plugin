@@ -11,7 +11,8 @@ Description = Charleston specific water quality processing.
 [Settings]
 mailhost=inlet.geol.sc.edu
 fromaddr=dan@inlet.geol.sc.edu
-toaddrs=dan@inlet.geol.sc.edu,hkelsey@ca.umces.edu,mjnkarma@gmail.com,dwayne.e.porter@gmail.com
+#toaddrs=dan@inlet.geol.sc.edu,hkelsey@ca.umces.edu,mjnkarma@gmail.com,dwayne.e.porter@gmail.com
+toaddrs=dan@inlet.geol.sc.edu
 subject='[WQ] Sarasota Prediction Results for %s'
 user=dan
 password=dramage239
