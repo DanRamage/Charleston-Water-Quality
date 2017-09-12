@@ -6,7 +6,7 @@
       <link href="http://howsthebeach.org/static/css/bootstrap/css/bootstrap.min.css" rel="stylesheet">
       <link href=http://howsthebeach.org//static/css/bootstrap/css/css/bootstrap-theme.min.css" rel="stylesheet">
 
-      <title>Sarasota Water Quality Prediction Results</title>
+      <title>Charleston Harbor Water Quality Prediction Results</title>
     </head>
     <body>
         <style>
@@ -21,7 +21,7 @@
         <div class="container">
             <div class="row">
               <div class="col-xs-12">
-                <h1>Sarasota Water Quality Prediction Results</h1>
+                <h1>Charleston Water Quality Prediction Results</h1>
                 <h2>Prediction for: ${prediction_date}</h2>
                 <h3>Prediction executed: ${execution_date}</h3>
               </div>
