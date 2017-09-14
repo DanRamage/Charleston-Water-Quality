@@ -260,9 +260,9 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
     'AR2': 'Brittlebank Park',
     'JIC2': 'James Island Creek 2',
     'JIC1': 'James Island Creek 1',
-    'SC1': 'Creek Park',
+    'SC1': 'Shem Creek 1',
     'SC2': 'Shem Creek 2',
-    'SC3': 'Shem Creek 2',
+    'SC3': 'Shem Creek 3',
     'FB1': 'Folly Beach'}
   logger = logging.getLogger('chs_historical_logger')
   logger.debug("Starting parse_dhec_sheet_data, parsing file: %s" % (xl_file_name))
