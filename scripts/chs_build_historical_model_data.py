@@ -554,6 +554,9 @@ def main():
 
 
   (options, args) = parser.parse_args()
+  """
+--WaterKeeperHistoricalFile="/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/Recreational Water Quality Monitoring Program Data.xlsx"  
+  """
 
   if(options.config_file is None):
     parser.print_help()
