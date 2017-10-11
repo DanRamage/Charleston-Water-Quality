@@ -2,10 +2,6 @@ import sys
 sys.path.append('../')
 sys.path.append('../../commonfiles/python')
 import os
-
-import logging
-logging.getLogger('yapsy').setLevel(logging.DEBUG)
-
 import logging.config
 from data_collector_plugin import data_collector_plugin
 import ConfigParser
@@ -14,14 +10,98 @@ import time
 import poplib
 import email
 from datetime import datetime
+from pytz import timezone
 #from yapsy.IPlugin import IPlugin
 #from multiprocessing import Process
 
-from chs_get_historical_data import parse_dhec_sheet_data
 from wq_sites import wq_sample_sites
 from wq_output_results import wq_sample_data,wq_samples_collection,wq_advisories_file,wq_station_advisories_file
 from data_result_types import data_result_types
 from smtp_utils import smtpClass
+
+def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
+  from xlrd import xldate
+  import xlrd
+
+
+  station_to_site_map = {
+    'AR2': 'Brittlebank Park',
+    'JIC2': 'James Island Creek 2',
+    'JIC1': 'James Island Creek 1',
+    'SC1': 'Shem Creek 1',
+    'SC2': 'Shem Creek 2',
+    'SC3': 'Shem Creek 3',
+    'FB1': 'Folly Beach'}
+  logger = logging.getLogger('chs_historical_logger')
+  logger.debug("Starting parse_dhec_sheet_data, parsing file: %s" % (xl_file_name))
+
+  wb = xlrd.open_workbook(filename = xl_file_name)
+
+  est_tz = timezone('US/Eastern')
+  #utc_tz = timezone('UTC')
+  sample_date = None
+  try:
+    sheet = wb.sheet_by_name('Results')
+  except Exception as e:
+    logger.exception(e)
+  else:
+    row_headers = []
+    results_ndx = \
+    station_ndx = \
+    date_ndx = \
+    parameter_ndx = \
+    time_ndx = None
+    for row_ndx,data_row in enumerate(sheet.get_rows()):
+      if row_ndx != 0:
+        try:
+          wq_sample_rec = wq_sample_data()
+          if data_row[parameter_ndx].value == "Enterococci":
+            station_name = data_row[station_ndx].value.strip()
+            if station_name in station_to_site_map:
+              wq_sample_rec.station = station_to_site_map[station_name]
+              try:
+                date_val = xlrd.xldate.xldate_as_datetime(data_row[date_ndx].value, wb.datemode)
+              except Exception as e:
+                try:
+                  date_val = datetime.strptime(data_row[date_ndx].value, "%Y-%m-%d")
+                except Exception as e:
+                  logger.error("Date format error on line: %d" % (row_ndx))
+                  logger.exception(e)
+                  break
+              try:
+                time_val = xldate.xldate_as_datetime(data_row[time_ndx].value, False)
+                #time_val = datetime.strptime(data_row[time_ndx].value, "%H%M")
+              except Exception as e:
+                val = data_row[time_ndx].value
+                try:
+                  time_val = datetime.strptime(str(val), "%H%M")
+                except Exception as e:
+                  logger.error("Time format error on line: %d" % (row_ndx))
+                  time_val = datetime.strptime('00:00:00', '%H:%M:%S')
+
+              wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time())))
+              #wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time()))).astimezone(utc_tz)
+              wq_sample_rec.value = data_row[results_ndx].value
+              logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
+                                                            wq_sample_rec.date_time,
+                                                            wq_sample_rec.value))
+              if sample_date is None or date_val > sample_date:
+                sample_date = date_val
+              wq_data_collection.append(wq_sample_rec)
+        except Exception as e:
+          logger.error("Error found on row: %d" % (row_ndx))
+          logger.exception(e)
+      else:
+        #Copy the header names out
+        for cell in data_row:
+          row_headers.append(cell.value)
+        station_ndx = row_headers.index('Station')
+        date_ndx = row_headers.index('Date')
+        time_ndx = row_headers.index('Time')
+        results_ndx = row_headers.index('Result')
+        parameter_ndx = row_headers.index("Parameter")
+
+  return sample_date
 
 class wq_sample_data_collector_plugin(data_collector_plugin):
 
