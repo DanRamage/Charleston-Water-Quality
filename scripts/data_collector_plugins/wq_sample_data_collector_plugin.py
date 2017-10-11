@@ -213,7 +213,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
       config_file.read(self.ini_file)
 
       logger = None
-      log_conf_file = config_file.get('logging', 'config_file')
+      log_conf_file = config_file.get('logging', 'wq_sample_data_log_file')
       if log_conf_file:
         logging.config.fileConfig(log_conf_file)
         logger = logging.getLogger('wq_data_harvest_logger')
