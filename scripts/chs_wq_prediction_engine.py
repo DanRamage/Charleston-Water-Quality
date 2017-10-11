@@ -108,7 +108,8 @@ class chs_prediction_engine(wq_prediction_engine):
     self.logger.info("Begin collect_data")
     try:
       simplePluginManager = PluginManager()
-      logging.getLogger('yapsy').setLevel(logging.DEBUG)
+      #logging.getLogger('yapsy').setLevel(logging.DEBUG)
+      logging.basicConfig(level=logging.DEBUG)
       simplePluginManager.setCategoriesFilter({
          "DataCollector": data_collector_plugin
          })
