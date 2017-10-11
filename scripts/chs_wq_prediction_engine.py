@@ -1,6 +1,9 @@
 import sys
 sys.path.append('../commonfiles/python')
 
+import logging
+logging.getLogger('yapsy').setLevel(logging.DEBUG)
+
 import logging.config
 from datetime import datetime
 from pytz import timezone
