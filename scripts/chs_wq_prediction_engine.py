@@ -1,9 +1,6 @@
 import sys
 sys.path.append('../commonfiles/python')
 
-import logging
-logging.getLogger('yapsy').setLevel(logging.DEBUG)
-
 import logging.config
 from datetime import datetime
 from pytz import timezone
@@ -12,6 +9,7 @@ import time
 import optparse
 import ConfigParser
 from collections import OrderedDict
+import logging
 from yapsy.PluginManager import PluginManager
 from multiprocessing import Queue
 
@@ -111,7 +109,9 @@ class chs_prediction_engine(wq_prediction_engine):
     self.logger.info("Begin collect_data")
     try:
       simplePluginManager = PluginManager()
-      #logging.getLogger('yapsy').setLevel(logging.DEBUG)
+      yapsy_log = logging.getLogger('yapsy')
+      yapsy_log.setLevel(logging.DEBUG)
+      yapsy_log.disabled = False
       simplePluginManager.setCategoriesFilter({
          "DataCollector": data_collector_plugin
          })
