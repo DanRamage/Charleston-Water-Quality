@@ -7,10 +7,12 @@ from data_collector_plugin import data_collector_plugin
 import ConfigParser
 import traceback
 import time
+import poplib
+import email
+from datetime import datetime
 #from yapsy.IPlugin import IPlugin
 #from multiprocessing import Process
 
-from get_wq_sample_data import check_email_for_update
 from chs_get_historical_data import parse_dhec_sheet_data
 from wq_sites import wq_sample_sites
 from wq_output_results import wq_sample_data,wq_samples_collection,wq_advisories_file,wq_station_advisories_file
@@ -46,6 +48,80 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
       self.logger.exception(e)
     return False
 
+  def check_email_for_update(self, config_filename):
+    file_list = []
+    logger = logging.getLogger('wq_data_harvest_logger')
+    logger.debug("Starting check_email_for_update")
+    try:
+      config_file = ConfigParser.RawConfigParser()
+      config_file.read(config_filename)
+
+      email_ini_config_filename = config_file.get("password_protected_configs", "settings_ini")
+      email_ini_config_file = ConfigParser.RawConfigParser()
+      email_ini_config_file.read(email_ini_config_filename)
+
+      email_host = email_ini_config_file.get("wq_results_email_settings", "host")
+      email_user = email_ini_config_file.get("wq_results_email_settings", "user")
+      email_password = email_ini_config_file.get("wq_results_email_settings", "password")
+      email_host_port = email_ini_config_file.get("wq_results_email_settings", "port")
+      destination_directory = email_ini_config_file.get("wq_results_email_settings", "destination_directory")
+    except (ConfigParser.Error, Exception) as e:
+      logger.exception(e)
+
+    connected = False
+    for attempt_cnt in range(0, 5):
+      try:
+        logger.info("Attempt: %d to connect to email server." % (attempt_cnt))
+        pop3_obj = poplib.POP3_SSL(email_host, email_host_port)
+        pop3_obj.user(email_user)
+        pop3_obj.pass_(email_password)
+        connected = True
+        logger.info("Successfully connected to email server.")
+        break
+      except (poplib.error_proto, Exception) as e:
+        logger.exception(e)
+        time.sleep(5)
+    if connected:
+      emails, total_bytes = pop3_obj.stat()
+      for i in range(emails):
+        # return in format: (response, ['line', ...], octets)
+        msg_num = i + 1
+        response = pop3_obj.retr(msg_num)
+        raw_message = response[1]
+
+        str_message = email.message_from_string("\n".join(raw_message))
+
+        # save attach
+        for part in str_message.walk():
+          logger.debug("Content type: %s" % (part.get_content_type()))
+
+          if part.get_content_maintype() == 'multipart':
+            continue
+
+          if part.get('Content-Disposition') is None:
+            logger.debug("No content disposition")
+            continue
+
+          filename = part.get_filename()
+          if filename.find('xlsx') != -1 or filename.find('xls') != -1:
+            download_time = datetime.now()
+            logger.debug("Attached filename: %s" % (filename))
+            save_file = "%s_%s" % (download_time.strftime("%Y-%m-%d_%H_%M_%S"), filename)
+            saved_file_name = os.path.join(destination_directory, save_file)
+            logger.debug("Saving file as filename: %s" % (saved_file_name))
+            try:
+              with open(saved_file_name, 'wb') as out_file:
+                out_file.write(part.get_payload(decode=1))
+                out_file.close()
+                file_list.append(saved_file_name)
+                pop3_obj.dele(msg_num)
+            except Exception as e:
+              logger.exception(e)
+      pop3_obj.quit()
+
+      logger.debug("Finished check_email_for_update")
+    return file_list
+
   def run(self):
     try:
       start_time = time.time()
@@ -56,7 +132,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
       log_conf_file = config_file.get('logging', 'config_file')
       if log_conf_file:
         logging.config.fileConfig(log_conf_file)
-        logger = logging.getLogger('sc_rivers_wq_data_harvest_logger')
+        logger = logging.getLogger('wq_data_harvest_logger')
         logger.info("Log file opened.")
     except ConfigParser.Error, e:
       traceback.print_exc("No log configuration file given, logging disabled.")
@@ -75,7 +151,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
           wq_sites = wq_sample_sites()
           wq_sites.load_sites(file_name=sites_location_file, boundary_file=boundaries_location_file)
 
-          wq_data_files = check_email_for_update(self.ini_file)
+          wq_data_files = self.check_email_for_update(self.ini_file)
           if logger is not None:
             logger.debug("Files: %s found" % (wq_data_files))
 

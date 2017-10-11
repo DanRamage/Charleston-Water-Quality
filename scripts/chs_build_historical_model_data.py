@@ -438,91 +438,93 @@ def create_historical_summary(**kwargs):
       for site_name in chs_results:
 
         site = wq_sites.get_site(site_name)
+        if site is not None:
+          sample_site_filename = os.path.join(kwargs['summary_out_directory'], "%s.csv" % (site.name))
+          write_header = True
+          try:
+            if logger:
+              logger.debug("Opening sample site history file: %s" % (sample_site_filename))
+            site_data_file = open(sample_site_filename, 'w')
+          except IOError, e:
+            logger.exception(e)
+            raise e
+          else:
 
-        sample_site_filename = os.path.join(kwargs['summary_out_directory'], "%s.csv" % (site.name))
-        write_header = True
-        try:
-          if logger:
-            logger.debug("Opening sample site history file: %s" % (sample_site_filename))
-          site_data_file = open(sample_site_filename, 'w')
-        except IOError, e:
-          logger.exception(e)
-          raise e
-        else:
+            logger.debug("Site: %s getting dates" % (site_name))
+            site_data = chs_results[site_name]
+            auto_number = 0
+            for rec in site_data:
+              #wq_date = rec['sample_date']
+              wq_date = rec.date_time
+              wq_utc_date = wq_date.astimezone(utc_tz)
 
-          logger.debug("Site: %s getting dates" % (site_name))
-          site_data = chs_results[site_name]
-          auto_number = 0
-          for rec in site_data:
-            #wq_date = rec['sample_date']
-            wq_date = rec.date_time
-            wq_utc_date = wq_date.astimezone(utc_tz)
+              logger.debug(
+                "Start building historical wq data for: %s Date/Time UTC: %s/EST: %s" % (site.name, wq_utc_date, wq_date))
 
-            logger.debug(
-              "Start building historical wq data for: %s Date/Time UTC: %s/EST: %s" % (site.name, wq_utc_date, wq_date))
+              entero_value = rec.value
+              if rec.date_time not in water_keeper_dates:
+                logger.debug("Site: %s adding date: %s" % (site_name, wq_date))
+                water_keeper_dates.append(rec.date_time)
 
-            entero_value = rec.value
-            if rec.date_time not in water_keeper_dates:
-              logger.debug("Site: %s adding date: %s" % (site_name, wq_date))
-              water_keeper_dates.append(rec.date_time)
+                try:
+                  #Get the station specific tide stations
+                  tide_station = config_file.get(site.name, 'tide_station')
+                  offset_tide_station = config_file.get(site.name, 'offset_tide_station')
+                  tide_offset_settings = {
+                    'tide_station': config_file.get(offset_tide_station, 'station_id'),
+                    'hi_tide_time_offset': config_file.getint(offset_tide_station, 'hi_tide_time_offset'),
+                    'lo_tide_time_offset': config_file.getint(offset_tide_station, 'lo_tide_time_offset'),
+                    'hi_tide_height_offset': config_file.getfloat(offset_tide_station, 'hi_tide_height_offset'),
+                    'lo_tide_height_offset': config_file.getfloat(offset_tide_station, 'lo_tide_height_offset')
+                  }
 
+                except ConfigParser.Error, e:
+                  if logger:
+                    logger.exception(e)
+
+              chs_wq_data.reset(site=site,
+                                tide_station=tide_station,
+                                tide_offset_params=tide_offset_settings,
+                                tide_data_obj=tide_file)
+
+              site_data = OrderedDict([('autonumber', auto_number),
+                                       ('station_name',site.name),
+                                       ('sample_datetime', wq_date.strftime("%Y-%m-%d %H:%M:%S")),
+                                       ('sample_datetime_utc', wq_utc_date.strftime("%Y-%m-%d %H:%M:%S")),
+                                       ('enterococcus_value', entero_value)])
               try:
-                #Get the station specific tide stations
-                tide_station = config_file.get(site.name, 'tide_station')
-                offset_tide_station = config_file.get(site.name, 'offset_tide_station')
-                tide_offset_settings = {
-                  'tide_station': config_file.get(offset_tide_station, 'station_id'),
-                  'hi_tide_time_offset': config_file.getint(offset_tide_station, 'hi_tide_time_offset'),
-                  'lo_tide_time_offset': config_file.getint(offset_tide_station, 'lo_tide_time_offset'),
-                  'hi_tide_height_offset': config_file.getfloat(offset_tide_station, 'hi_tide_height_offset'),
-                  'lo_tide_height_offset': config_file.getfloat(offset_tide_station, 'lo_tide_height_offset')
-                }
-
-              except ConfigParser.Error, e:
+                chs_wq_data.query_data(wq_utc_date, wq_utc_date, site_data)
+              except Exception,e:
                 if logger:
                   logger.exception(e)
-
-            chs_wq_data.reset(site=site,
-                              tide_station=tide_station,
-                              tide_offset_params=tide_offset_settings,
-                              tide_data_obj=tide_file)
-
-            site_data = OrderedDict([('autonumber', auto_number),
-                                     ('station_name',site.name),
-                                     ('sample_datetime', wq_date.strftime("%Y-%m-%d %H:%M:%S")),
-                                     ('sample_datetime_utc', wq_utc_date.strftime("%Y-%m-%d %H:%M:%S")),
-                                     ('enterococcus_value', entero_value)])
-            try:
-              chs_wq_data.query_data(wq_utc_date, wq_utc_date, site_data)
-            except Exception,e:
-              if logger:
-                logger.exception(e)
-              sys.exit(-1)
-            #wq_data_obj.append(site_data)
-            header_buf = []
-            data = []
-            for key in site_data:
+                sys.exit(-1)
+              #wq_data_obj.append(site_data)
+              header_buf = []
+              data = []
+              for key in site_data:
+                if write_header:
+                  header_buf.append(key)
+                if site_data[key] != wq_defines.NO_DATA:
+                  data.append(str(site_data[key]))
+                else:
+                  data.append("")
               if write_header:
-                header_buf.append(key)
-              if site_data[key] != wq_defines.NO_DATA:
-                data.append(str(site_data[key]))
-              else:
-                data.append("")
-            if write_header:
-              site_data_file.write(",".join(header_buf))
+                site_data_file.write(",".join(header_buf))
+                site_data_file.write('\n')
+                header_buf[:]
+                write_header = False
+
+              site_data_file.write(",".join(data))
               site_data_file.write('\n')
-              header_buf[:]
-              write_header = False
+              site_data_file.flush()
+              data[:]
+              if logger:
+                logger.debug("Finished building historical wq data for: %s Date/Time UTC: %s/EST: %s" % (site.name, wq_utc_date, wq_date))
+              auto_number += 1
 
-            site_data_file.write(",".join(data))
-            site_data_file.write('\n')
-            site_data_file.flush()
-            data[:]
-            if logger:
-              logger.debug("Finished building historical wq data for: %s Date/Time UTC: %s/EST: %s" % (site.name, wq_utc_date, wq_date))
-            auto_number += 1
-
-        site_data_file.close()
+          site_data_file.close()
+        else:
+          logger.error("Site: %s not found in sample sites." % (site_name))
     if logger:
       logger.debug("Stations not matching: %s" % (", ".join(sites_not_found)))
 
@@ -554,8 +556,9 @@ def main():
 
 
   (options, args) = parser.parse_args()
+  #Water keepers file is midnight based, dhec has sample times.
   """
---WaterKeeperHistoricalFile="/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/Recreational Water Quality Monitoring Program Data.xlsx"  
+--DHECHistoryFile=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP13_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP14_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP15_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP16_Database.xls  
   """
 
   if(options.config_file is None):

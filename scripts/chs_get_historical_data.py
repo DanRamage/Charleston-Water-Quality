@@ -304,7 +304,7 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
                 time_val = xldate.xldate_as_datetime(data_row[time_ndx].value, False)
                 #time_val = datetime.strptime(data_row[time_ndx].value, "%H%M")
               except Exception as e:
-                val = data_row[date_ndx].value
+                val = data_row[time_ndx].value
                 try:
                   time_val = datetime.strptime(str(val), "%H%M")
                 except Exception as e:
