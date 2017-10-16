@@ -275,7 +275,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
               mail_body = "Files: %s downloaded and processed" % (renamed_files)
             else:
               mail_body = "ERROR: No files downloaded."
-            subject = "[WQ]Saluda River Sample Data"
+            subject = "[WQ]CHS Sample Data"
             # Now send the email.
             smtp = smtpClass(host=self.monitor_mailhost,
                              user=self.monitor_user,
