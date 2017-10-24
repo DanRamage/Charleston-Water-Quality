@@ -436,6 +436,9 @@ def create_historical_summary(**kwargs):
       # Build list of all dates.
       water_keeper_dates = []
       for site_name in chs_results:
+        #Sort dates.
+        site_data = chs_results[site_name]
+        site_data.sort(key=lambda x: x.date_time, reverse=False)
 
         site = wq_sites.get_site(site_name)
         if site is not None:
@@ -558,7 +561,8 @@ def main():
   (options, args) = parser.parse_args()
   #Water keepers file is midnight based, dhec has sample times.
   """
---DHECHistoryFile=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP13_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP14_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP15_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP16_Database.xls  
+  --DHECHistoryFile=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP13_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP14_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP15_Database.xls,/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/CWK_RWQMP16_Database.xls  
+  --WaterKeeperHistoricalFile="/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/data/historic/wq_sample_data/Recreational Water Quality Monitoring Program Data.xlsx"
   """
 
   if(options.config_file is None):
