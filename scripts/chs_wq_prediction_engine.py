@@ -138,7 +138,7 @@ class chs_prediction_engine(wq_prediction_engine):
       self.logger.info("Waiting for %d plugins to complete." % (plugin_cnt))
       for plugin in simplePluginManager.getAllPlugins():
         plugin.plugin_object.join()
-
+        plugin.plugin_object.finalize()
       while not output_queue.empty():
         results = output_queue.get()
         if results[0] == data_result_types.MODEL_DATA_TYPE:
@@ -315,7 +315,7 @@ def main():
       logger.info("Log file opened.")
       use_logging = True
 
-  except ConfigParser.Error, e:
+  except (ConfigParser.Error,Exception) as e:
     traceback.print_exc(e)
     sys.exit(-1)
   else:
