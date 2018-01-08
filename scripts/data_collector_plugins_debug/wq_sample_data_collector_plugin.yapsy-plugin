@@ -1,0 +1,15 @@
+[Core]
+Name = wq_sample_data_collector_plugin
+Module = wq_sample_data_collector_plugin
+
+[Documentation]
+Author = Dan Ramage
+Version = 0.1
+Website = http://howthebeach.org
+Description = Checks for a recently emailed bacteria sample report.
+
+[Settings]
+ini_file=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/config/chs_prediction_engine_debug.ini
+
+[MonitorEmail]
+ini_file=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/config/password_options.ini
