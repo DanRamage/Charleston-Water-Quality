@@ -362,7 +362,7 @@ class chs_wq_data(wq_data):
                                                        units='feet',
                                                        timezone='GMT',
                                                        smoothData=False,
-                                                       write_tide_data=True)
+                                                       write_tide_data=False)
           if tide_data is not None:
             break
         if tide_data is not None:
