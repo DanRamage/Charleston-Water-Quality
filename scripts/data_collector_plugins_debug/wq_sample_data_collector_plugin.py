@@ -67,7 +67,7 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
                   date_val = datetime.strptime(data_row[date_ndx].value, "%Y-%m-%d")
                 except Exception as e:
                   logger.error("Date format error on line: %d" % (row_ndx))
-                  logger.exception(e)
+                  #logger.exception(e)
                   process_row = False
                   #break
               if process_row:
