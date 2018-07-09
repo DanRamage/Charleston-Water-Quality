@@ -54,6 +54,7 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
     for row_ndx,data_row in enumerate(sheet.get_rows()):
       if row_ndx != 0:
         try:
+          process_row = True
           wq_sample_rec = wq_sample_data()
           if data_row[parameter_ndx].value == "Enterococci":
             station_name = data_row[station_ndx].value.strip()
@@ -67,27 +68,29 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
                 except Exception as e:
                   logger.error("Date format error on line: %d" % (row_ndx))
                   logger.exception(e)
-                  break
-              try:
-                time_val = xldate.xldate_as_datetime(data_row[time_ndx].value, False)
-                #time_val = datetime.strptime(data_row[time_ndx].value, "%H%M")
-              except Exception as e:
-                val = data_row[time_ndx].value
+                  process_row = False
+                  #break
+              if process_row:
                 try:
-                  time_val = datetime.strptime(str(val), "%H%M")
+                  time_val = xldate.xldate_as_datetime(data_row[time_ndx].value, False)
+                  #time_val = datetime.strptime(data_row[time_ndx].value, "%H%M")
                 except Exception as e:
-                  logger.error("Time format error on line: %d" % (row_ndx))
-                  time_val = datetime.strptime('00:00:00', '%H:%M:%S')
+                  val = data_row[time_ndx].value
+                  try:
+                    time_val = datetime.strptime(str(val), "%H%M")
+                  except Exception as e:
+                    logger.error("Time format error on line: %d" % (row_ndx))
+                    time_val = datetime.strptime('00:00:00', '%H:%M:%S')
 
-              wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time())))
-              #wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time()))).astimezone(utc_tz)
-              wq_sample_rec.value = data_row[results_ndx].value
-              logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
-                                                            wq_sample_rec.date_time,
-                                                            wq_sample_rec.value))
-              if sample_date is None or date_val > sample_date:
-                sample_date = date_val
-              wq_data_collection.append(wq_sample_rec)
+                wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time())))
+                #wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time()))).astimezone(utc_tz)
+                wq_sample_rec.value = data_row[results_ndx].value
+                logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
+                                                              wq_sample_rec.date_time,
+                                                              wq_sample_rec.value))
+                if sample_date is None or date_val > sample_date:
+                  sample_date = date_val
+                wq_data_collection.append(wq_sample_rec)
         except Exception as e:
           logger.error("Error found on row: %d" % (row_ndx))
           logger.exception(e)
@@ -137,8 +140,11 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
 
   def check_email_for_update(self, config_filename):
     file_list = []
-
+    start_time = time.time()
+    self.logging_client_cfg['disable_existing_loggers'] = True
+    logging.config.dictConfig(self.logging_client_cfg)
     logger = logging.getLogger(self.__class__.__name__)
+    logger.debug("run started.")
 
     #logger = logging.getLogger('wq_data_harvest_logger')
     #self.logger.debug("Starting check_email_for_update")
@@ -209,7 +215,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
               logger.exception(e)
       pop3_obj.quit()
 
-      logger.debug("Finished check_email_for_update")
+      logger.debug("Finished check_email_for_update in: %f seconds" % (time.time()-start_time))
     return file_list
 
   def run(self):
