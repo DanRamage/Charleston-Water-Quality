@@ -4,7 +4,10 @@ sys.path.append('../../commonfiles/python')
 import os
 import logging.config
 from data_collector_plugin import data_collector_plugin
-import ConfigParser
+if sys.version_info[0] < 3:
+  import ConfigParser
+else:
+  import configparser as ConfigParser
 import traceback
 import time
 import poplib
@@ -84,13 +87,16 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
 
                 wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time())))
                 #wq_sample_rec.date_time = (est_tz.localize(datetime.combine(date_val.date(), time_val.time()))).astimezone(utc_tz)
-                wq_sample_rec.value = data_row[results_ndx].value
-                logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
-                                                              wq_sample_rec.date_time,
-                                                              wq_sample_rec.value))
-                if sample_date is None or date_val > sample_date:
-                  sample_date = date_val
-                wq_data_collection.append(wq_sample_rec)
+                if len(data_row[results_ndx].value) == 0:
+                  wq_sample_rec.value = data_row[results_ndx].value
+                  logger.debug("Site: %s Date: %s Value: %s" % (wq_sample_rec.station,
+                                                                wq_sample_rec.date_time,
+                                                                wq_sample_rec.value))
+                  if sample_date is None or date_val > sample_date:
+                    sample_date = date_val
+                  wq_data_collection.append(wq_sample_rec)
+                else:
+                  logger.error("Site: %s Date: %s has no value on line: %d" % (wq_sample_rec.station, wq_sample_data.date_time, row_ndx))
         except Exception as e:
           logger.error("Error found on row: %d" % (row_ndx))
           logger.exception(e)
@@ -105,6 +111,84 @@ def parse_dhec_sheet_data(xl_file_name, wq_data_collection):
         parameter_ndx = row_headers.index("Parameter")
 
   return sample_date
+
+def check_email_for_update(config_filename):
+  file_list = []
+  start_time = time.time()
+  logger = logging.getLogger()
+  logger.debug("check_email_for_update started.")
+
+  #logger = logging.getLogger('wq_data_harvest_logger')
+  #self.logger.debug("Starting check_email_for_update")
+  try:
+    config_file = ConfigParser.RawConfigParser()
+    config_file.read(config_filename)
+
+    email_ini_config_filename = config_file.get("password_protected_configs", "settings_ini")
+    email_ini_config_file = ConfigParser.RawConfigParser()
+    email_ini_config_file.read(email_ini_config_filename)
+
+    email_host = email_ini_config_file.get("wq_results_email_settings", "host")
+    email_user = email_ini_config_file.get("wq_results_email_settings", "user")
+    email_password = email_ini_config_file.get("wq_results_email_settings", "password")
+    email_host_port = email_ini_config_file.get("wq_results_email_settings", "port")
+    destination_directory = email_ini_config_file.get("wq_results_email_settings", "destination_directory")
+  except (ConfigParser.Error, Exception) as e:
+    logger.exception(e)
+
+  connected = False
+  for attempt_cnt in range(0, 5):
+    try:
+      logger.info("Attempt: %d to connect to email server." % (attempt_cnt))
+      pop3_obj = poplib.POP3_SSL(email_host, email_host_port)
+      pop3_obj.user(email_user)
+      pop3_obj.pass_(email_password)
+      connected = True
+      logger.info("Successfully connected to email server.")
+      break
+    except (poplib.error_proto, Exception) as e:
+      logger.exception(e)
+      time.sleep(5)
+  if connected:
+    emails, total_bytes = pop3_obj.stat()
+    for i in range(emails):
+      # return in format: (response, ['line', ...], octets)
+      msg_num = i + 1
+      response = pop3_obj.retr(msg_num)
+      raw_message = response[1]
+
+      str_message = email.message_from_string((b"\n".join(raw_message)).decode('utf-8'))
+
+      # save attach
+      for part in str_message.walk():
+        logger.debug("Content type: %s" % (part.get_content_type()))
+
+        if part.get_content_maintype() == 'multipart':
+          continue
+
+        if part.get('Content-Disposition') is None:
+          logger.debug("No content disposition")
+          continue
+
+        filename = part.get_filename()
+        if filename.find('xlsx') != -1 or filename.find('xls') != -1:
+          download_time = datetime.now()
+          logger.debug("Attached filename: %s" % (filename))
+          save_file = "%s_%s" % (download_time.strftime("%Y-%m-%d_%H_%M_%S"), filename)
+          saved_file_name = os.path.join(destination_directory, save_file)
+          logger.debug("Saving file as filename: %s" % (saved_file_name))
+          try:
+            with open(saved_file_name, 'wb') as out_file:
+              out_file.write(part.get_payload(decode=1))
+              out_file.close()
+              file_list.append(saved_file_name)
+              pop3_obj.dele(msg_num)
+          except Exception as e:
+            logger.exception(e)
+    pop3_obj.quit()
+
+    logger.debug("Finished check_email_for_update in: %f seconds" % (time.time()-start_time))
+  return file_list
 
 class wq_sample_data_collector_plugin(data_collector_plugin):
 
@@ -185,7 +269,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
         response = pop3_obj.retr(msg_num)
         raw_message = response[1]
 
-        str_message = email.message_from_string("\n".join(raw_message))
+        str_message = email.message_from_string((b"\n".join(raw_message)).decode('utf-8'))
 
         # save attach
         for part in str_message.walk():
@@ -242,14 +326,15 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
         results_file = config_file.get('json_settings', 'advisory_results')
         station_results_directory = config_file.get('json_settings', 'station_results_directory')
 
-      except ConfigParser.Error, e:
+      except ConfigParser.Error as e:
         logger.exception(e)
       else:
         try:
           wq_sites = wq_sample_sites()
           wq_sites.load_sites(file_name=sites_location_file, boundary_file=boundaries_location_file)
 
-          wq_data_files = self.check_email_for_update(self.ini_file)
+          #wq_data_files = self.check_email_for_update(self.ini_file)
+          wq_data_files = check_email_for_update(self.ini_file)
           if logger is not None:
             logger.debug("Files: %s found" % (wq_data_files))
 
@@ -309,7 +394,7 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
 
           if logger is not None:
             logger.info("Log file closed.")
-        except Exception, e:
+        except Exception as e:
           if(logger):
             logger.exception(e)
       logger.debug("run finished in %f seconds." % (time.time() - start_time))

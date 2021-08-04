@@ -53,7 +53,7 @@ class chs_wq_data(wq_data):
         self.logger.error("Unable to connect to DB: %s at %s." %(kwargs['xenia_obs_db_name'],kwargs['xenia_obs_db_host']))
 
 
-    except Exception,e:
+    except Exception as e:
       self.logger.exception(e)
       raise
 
@@ -207,6 +207,7 @@ class chs_wq_data(wq_data):
 
 
     self.initialize_return_data(wq_tests_data, reset_site_specific_data_only)
+    self.get_tide_data(start_date, wq_tests_data)
 
     if not reset_site_specific_data_only:
       for station in self.usgs_stations:
@@ -220,7 +221,7 @@ class chs_wq_data(wq_data):
 
 
     self.get_nexrad_data(start_date, wq_tests_data)
-    self.get_tide_data(start_date, wq_tests_data)
+    #self.get_tide_data(start_date, wq_tests_data)
 
 
     if self.logger:
@@ -245,7 +246,7 @@ class chs_wq_data(wq_data):
         sensor_id = self.xenia_obs_db.sensorExists(variable, from_uom, platform_handle, 1)
         wind_dir_id = self.xenia_obs_db.sensorExists('wind_from_direction', 'degrees_true', platform_handle, 1)
 
-      if sensor_id is not -1 and sensor_id is not None:
+      if sensor_id != -1 and sensor_id is not None:
         recs = self.xenia_obs_db.session.query(sl_multi_obs) \
           .filter(sl_multi_obs.m_date >= begin_date.strftime('%Y-%m-%dT%H:%M:%S')) \
           .filter(sl_multi_obs.m_date < end_date.strftime('%Y-%m-%dT%H:%M:%S')) \

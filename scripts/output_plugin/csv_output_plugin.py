@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../../commonfiles/python')
+sys.path.append('../commonfiles/python')
 import logging.config
 from output_plugin import output_plugin
 
@@ -9,14 +9,9 @@ class csv_output_plugin(output_plugin):
     self.logger = logging.getLogger(__name__)
 
   def initialize_plugin(self, **kwargs):
-    try:
-      details = kwargs['details']
+    details = kwargs['details']
 
-      self.csv_outfile = details.get("Settings", "csv_outfile")
-      return True
-    except Exception as e:
-      self.logger.exception(e)
-    return False
+    self.csv_outfile = details.get("Settings", "csv_outfile")
 
   def emit(self, **kwargs):
     if self.logger:

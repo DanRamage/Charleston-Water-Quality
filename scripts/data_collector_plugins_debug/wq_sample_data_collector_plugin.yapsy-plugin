@@ -12,4 +12,4 @@ Description = Checks for a recently emailed bacteria sample report.
 ini_file=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/config/chs_prediction_engine_debug.ini
 
 [MonitorEmail]
-ini_file=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/config/password_options.ini
+ini_file=/Users/danramage/Documents/workspace/WaterQuality/Charleston-Water-Quality/config/password_options_debug.ini

@@ -10,3 +10,5 @@ Description = Charleston specific nexrad data processing.
 
 [Settings]
 ini_file=/home/xeniaprod/scripts/Charleston-Water-Quality/config/chs_prediction_engine.ini
+log_config=/home/xeniaprod/scripts/Charleston-Water-Quality/config/logconf/chs_xmrg_ingest_debug.conf
+xmrg_log_file=/home/xeniaprod/tmp/log/chs_nexrad_workers.log
