@@ -6,7 +6,7 @@
       <link href="http://howsthebeach.org/static/css/bootstrap/css/bootstrap.min.css" rel="stylesheet">
       <link href=http://howsthebeach.org//static/css/bootstrap/css/css/bootstrap-theme.min.css" rel="stylesheet">
 
-      <title>Sarasota Water Quality Prediction Results</title>
+      <title>Charleston Harbor Water Quality Prediction Results</title>
     </head>
     <body>
         <style>
