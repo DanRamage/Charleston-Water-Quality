@@ -161,7 +161,9 @@ class chs_prediction_engine(wq_prediction_engine):
       config_file.read(kwargs['config_file_name'])
 
       data_collector_plugin_directories=config_file.get('data_collector_plugins', 'plugin_directories')
-      if len(data_collector_plugin_directories):
+      data_collector_plugins_enable=config_file.getboolean('data_collector_plugins', 'enable')
+
+      if data_collector_plugins_enable and len(data_collector_plugin_directories):
         data_collector_plugin_directories = data_collector_plugin_directories.split(',')
         self.collect_data(data_collector_plugin_directories=data_collector_plugin_directories)
 
@@ -183,6 +185,8 @@ class chs_prediction_engine(wq_prediction_engine):
 
       units_file = config_file.get('units_conversion', 'config_file')
       output_plugin_dirs=config_file.get('output_plugins', 'plugin_directories').split(',')
+      output_plugins_enable=config_file.getboolean('output_plugins', 'enable')
+
     except (ConfigParser.Error, Exception) as e:
       self.logger.exception(e)
     else:
@@ -287,10 +291,11 @@ class chs_prediction_engine(wq_prediction_engine):
 
       self.logger.debug("Total time to execute all sites models: %f ms" % (total_time * 1000))
       try:
-        self.output_results(output_plugin_directories=output_plugin_dirs,
-                                site_model_ensemble=site_model_ensemble,
-                                prediction_date=kwargs['begin_date'],
-                                prediction_run_date=prediction_testrun_date)
+        if output_plugins_enable:
+          self.output_results(output_plugin_directories=output_plugin_dirs,
+                                  site_model_ensemble=site_model_ensemble,
+                                  prediction_date=kwargs['begin_date'],
+                                  prediction_run_date=prediction_testrun_date)
       except Exception as e:
         self.logger.exception(e)
     return
