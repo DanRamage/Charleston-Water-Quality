@@ -3,7 +3,7 @@ sys.path.append('../')
 sys.path.append('../../commonfiles/python')
 import os
 import logging.config
-from data_collector_plugin import data_collector_plugin
+import data_collector_plugin as my_plugin
 if sys.version_info[0] < 3:
   import ConfigParser
 else:
@@ -190,20 +190,22 @@ def check_email_for_update(config_filename):
     logger.debug("Finished check_email_for_update in: %f seconds" % (time.time()-start_time))
   return file_list
 
-class wq_sample_data_collector_plugin(data_collector_plugin):
+class wq_sample_data_collector_plugin(my_plugin.data_collector_plugin):
 
   def __init__(self):
-    data_collector_plugin.__init__(self)
+    #data_collector_plugin.__init__(self)
+    super().__init__()
     self.output_queue = None
 
   def initialize_plugin(self, **kwargs):
-    data_collector_plugin.initialize_plugin(self, **kwargs)
+    super().initialize_plugin(**kwargs)
     try:
       logger = logging.getLogger(self.__class__.__name__)
 
       self.plugin_details = kwargs['details']
 
       self.ini_file = self.plugin_details.get('Settings', 'ini_file')
+      self.log_config = self.plugin_details.get('Settings', 'log_config')
       self.output_queue = kwargs['queue']
 
       email_ini_file = self.plugin_details.get("MonitorEmail", "ini_file")
@@ -216,7 +218,6 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
       self.monitor_subject = config_file.get("sample_data_collector_plugin", "subject")
       self.monitor_user = config_file.get("sample_data_collector_plugin", "user")
       self.monitor_password = config_file.get("sample_data_collector_plugin", "password")
-
       return True
     except Exception as e:
       logger.exception(e)
@@ -307,8 +308,12 @@ class wq_sample_data_collector_plugin(data_collector_plugin):
       start_time = time.time()
 
       self.logging_client_cfg['disable_existing_loggers'] = True
-      logging.config.dictConfig(self.logging_client_cfg)
-      logger = logging.getLogger(self.__class__.__name__)
+      #logging.config.dictConfig(self.logging_client_cfg)
+      #logger = logging.getLogger(self.__class__.__name__)
+
+      logging.config.fileConfig(self.log_config)
+      logger = logging.getLogger()
+
       logger.debug("run started.")
 
       config_file = ConfigParser.RawConfigParser()

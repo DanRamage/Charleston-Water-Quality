@@ -10,6 +10,7 @@ Description = Checks for a recently emailed bacteria sample report.
 
 [Settings]
 ini_file=/home/xeniaprod/scripts/Charleston-Water-Quality/config/chs_prediction_engine.ini
+log_config=/home/xeniaprod/scripts/Charleston-Water-Quality/config/logconf/chs_wq_sample_data.conf
 
 [MonitorEmail]
 ini_file=/home/xeniaprod/scripts/Charleston-Water-Quality/config/password_options.ini

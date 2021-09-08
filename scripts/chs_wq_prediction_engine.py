@@ -294,7 +294,52 @@ class chs_prediction_engine(wq_prediction_engine):
       except Exception as e:
         self.logger.exception(e)
     return
+  '''
+  def output_results(self, **kwargs):
 
+    self.logger.info("Begin run_output_plugins")
+
+    simplePluginManager = PluginManager()
+    logging.getLogger('yapsy').setLevel(logging.DEBUG)
+    simplePluginManager.setCategoriesFilter({
+       "OutputResults": data_collector_plugin
+       })
+
+    # Tell it the default place(s) where to find plugins
+    self.logger.debug("Plugin directories: %s" % (kwargs['output_plugin_directories']))
+    simplePluginManager.setPluginPlaces(kwargs['output_plugin_directories'])
+    yapsy_logger = logging.getLogger('yapsy')
+    yapsy_logger.setLevel(logging.DEBUG)
+    # yapsy_logger.parent.level = logging.DEBUG
+    yapsy_logger.disabled = False
+
+    simplePluginManager.collectPlugins()
+
+    plugin_cnt = 0
+    plugin_start_time = time.time()
+    for plugin in simplePluginManager.getAllPlugins():
+      try:
+        self.logger.info("Starting plugin: %s" % (plugin.name))
+        if plugin.plugin_object.initialize_plugin(details=plugin.details,
+                                                  prediction_date=kwargs['prediction_date'].astimezone(timezone("US/Eastern")).strftime("%Y-%m-%d %H:%M:%S"),
+                                                  execution_date=kwargs['prediction_run_date'].strftime("%Y-%m-%d %H:%M:%S"),
+                                                  ensemble_tests=kwargs['site_model_ensemble']
+                                                  ):
+          plugin.plugin_object.start()
+          plugin_cnt += 1
+        else:
+          self.logger.error("Failed to initialize plugin: %s" % (plugin.details))
+      except  Exception as e:
+        self.logger.exception(e)
+    #Wait for the plugings to finish up.
+    self.logger.info("Waiting for %d plugins to complete." % (plugin_cnt))
+    for plugin in simplePluginManager.getAllPlugins():
+      plugin.plugin_object.join()
+      plugin.plugin_object.finalize()
+
+    self.logger.debug("%d output plugins run in %f seconds" % (plugin_cnt, time.time() - plugin_start_time))
+    self.logger.info("Finished output_results")
+  '''
 def main():
   parser = optparse.OptionParser()
   parser.add_option("-c", "--ConfigFile", dest="config_file",
