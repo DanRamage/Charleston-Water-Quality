@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../../commonfiles/python')
 import logging.config
-import json
+import simplejson as json
 
 from output_plugin import output_plugin
 
